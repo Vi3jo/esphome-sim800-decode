@@ -1,0 +1,28 @@
+sim800l:
+  on_sms_received:
+    - lambda: |-
+        id(sms_sender).publish_state(sender);
+        std::string decoded = "";
+        if (message.length() >= 4 && message.length() % 4 == 0) {
+          for (size_t i = 0; i < message.length(); i += 4) {
+            std::string part = message.substr(i, 4);
+            char* endptr = nullptr;
+            uint16_t code = (uint16_t)strtoul(part.c_str(), &endptr, 16);
+            if (*endptr != '\0') {
+               continue; 
+            }
+            if (code < 0x80) {
+              decoded += (char)code;
+            } else if (code < 0x800) {
+              decoded += (char)(0xC0 | (code >> 6));
+              decoded += (char)(0x80 | (code & 0x3F));
+            } else {
+              decoded += (char)(0xE0 | (code >> 12));
+              decoded += (char)(0x80 | ((code >> 6) & 0x3F));
+              decoded += (char)(0x80 | (code & 0x3F));
+            }
+          }
+          id(sms_message).publish_state(decoded);
+        } else {
+          id(sms_message).publish_state(message);
+        }
