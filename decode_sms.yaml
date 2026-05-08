@@ -1,3 +1,39 @@
+api:
+  services:
+    - service: send_sms_ru
+      variables:
+        recipient: string
+        message: string
+      then:
+        - lambda: |-
+            id(uart_bus).write_str("AT+CSCS=\"UCS2\"\r\n");
+            delay(50);
+            id(uart_bus).write_str("AT+CSMP=17,167,0,8\r\n");
+            delay(50);
+            std::string hex_phone = "";
+            for (char c : recipient) {
+                char buf[5];
+                sprintf(buf, "%04X", c);
+                hex_phone += buf;
+            }
+            std::string start_cmd = "AT+CMGS=\"" + hex_phone + "\"\r\n";
+            id(uart_bus).write_str(start_cmd.c_str());
+            delay(100);
+            for (size_t i = 0; i < message.length(); ) {
+                uint32_t cp = 0;
+                unsigned char u = message[i];
+                if (u <= 0x7F) { cp = u; i++; }
+                else if ((u & 0xE0) == 0xC0) { cp = ((u&0x1F)<<6)|(message[i+1]&0x3F); i+=2; }
+                else if ((u & 0xF0) == 0xE0) { cp = ((u&0x0F)<<12)|((message[i+1]&0x3F)<<6)|((message[i+2]&0x3F)); i+=3; }
+                else { i++; continue; }
+                char buf[5];
+                sprintf(buf, "%04X", cp);
+                id(uart_bus).write_str(buf);
+            }
+            id(uart_bus).write_byte(0x1A);
+            delay(500);
+            id(uart_bus).write_str("AT+CSCS=\"GSM\"\r\n");
+
 sim800l:
   on_sms_received:
     - lambda: |-
